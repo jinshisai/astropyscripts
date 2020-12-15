@@ -31,13 +31,21 @@ def IvTOTex(nu0, bmaj, bmin, Iv):
     return Tex
 
 
-# equivalent brightness temperature
+# Calculate equivalent brightness temperature
 def IvTOJT(nu0, bmaj, bmin, Iv):
-    # nu0 = header['RESTFRQ'] rest frequency [Hz]
-    # bmaj = header['BMAJ'] # major beam size [deg]
-    # bmin = header['BMIN'] # minor beam size [deg]
-    # Iv: intensity [Jy/beam]
-    # C2: coefficient to convert beam to str
+    '''
+    Calculate the equivalent brightness temperature from intensity in a unit of Jy/beam.
+
+    Input
+     nu0: rest frequency [Hz]
+     bmaj: major beam size [deg]
+     bmin: minor beam size [deg]
+     Iv: intensity [Jy/beam]
+
+    Others
+     C2: coefficient to convert beam to str
+     JT: equivalent brightness temperature [K]
+    '''
 
     bmaj = bmaj*np.pi/180. # deg --> radian
     bmin = bmin*np.pi/180. # deg --> radian

@@ -1,6 +1,6 @@
 Astropyscripts
 -----------------------
-Python scripts for astronomy.
+Python scripts for astronomy. A main function is Imfits to read and handle fits files easily.
 
 
 **Required modules**
@@ -19,11 +19,19 @@ Department of Astronomy, the University of Tokyo
 
 Features
 ---------------------
-Imfits, a class in imfits.py, is to read fits files and contain header and image information in variables to call the information easily. This is made for fits images especially at (sub)millimeter wavelengths obtained like ALMA, ACA, SMA, JCMT, IRAM-30m and so on. Not guaranteed but could be applied to other fits data like at IR wavelengths.
+The main function Imfits, a class in imfits.py, is to read fits files and contain header and image information in variables to call the information easily. This is made for fits images especially at (sub)millimeter wavelengths obtained like ALMA, ACA, SMA, JCMT, IRAM-30m and so on. Not guaranteed but could be applied to other fits data like at IR wavelengths.
 
 A input fits file is expected to have four axes; RA, Dec, frequency and Stokes axes. Or it can also read fits files of position-velocity (PV) diagrams. The script is well tested For fits files exported from [CASA](https://casa.nrao.edu).
 
 All functions in pyfigures.py, which are to draw maps from a fits file, were implemented into imfits.py.
+
+Others are just for convenience.
+- astrconsts: Contains constants often used in astronomy.
+- astrfuncs: Contains functions often used in astronomy.
+- imcrop: Crop a specific region from a fits file.
+- imhandle: Handle fits files.
+- mathfuncs: Contains mathematical functions often used in astronomy.
+- pyfigures: A script to draw maps from fits files. Now absorbed into imfits.
 
 
 How to use

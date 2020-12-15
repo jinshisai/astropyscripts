@@ -116,7 +116,7 @@ def imdeproject(fitsdata, pa=0., inc=0., deg=True):
 	return
 
 
-def ciruclar_slice(image,deltapa=np.linspace(-180,180,10),istokes=0,ifreq=0):
+def circular_slice(image,deltapa=np.linspace(-180,180,10),istokes=0,ifreq=0):
 	'''
 	Produce figure where position angle (x) vs radius (y) vs intensity (color)
 
@@ -151,7 +151,7 @@ def ciruclar_slice(image,deltapa=np.linspace(-180,180,10),istokes=0,ifreq=0):
 	print ('circular slice...')
 	cslice = np.zeros([Nz,Npa])
 	for ipa in range(Npa):
-		rotimage      = imrotate(data,deltapa[ipa])
+		rotimage      = imrotate(data,-deltapa[ipa])
 		cslice[:,ipa] = rotimage[refpix_y:,refpix_x]
 
 	return cslice
@@ -596,6 +596,135 @@ def fits_TbTOIv(self, outname=None, overwrite=False):
 
 	fits.writeto(outname, data_Iv, header=hd_new)
 
+
+
+def fits_getaxes(self, velocity=True, relative=True, inmode='fits'):
+	'''
+	Return axes of the input fits file.
+
+	self (str): input fits file.
+	inmode (str): If 'fits', self (input strings) will be treated as input fits file.
+	 If 'data', input values of data and header will be used. Default 'fits'. Put strings as self,
+	 even if inmode='data' to privent errors.
+	data (array): data of a fits file.
+	header (array): header of a fits file.
+	noreg (bool): If False, regrid will be done. Default True.
+	 For some projections, this will be needed to draw maps with exact coordinates.
+	'''
+	# reading fits files
+	if inmode == 'fits':
+		data, header = fits.getdata(self,header=True)
+	elif inmode == 'data':
+		if data is None:
+			print ("inmode ='data' is selected. data must be provided.")
+			return
+		elif header is None:
+			print ("inmode ='data' is selected. header must be provided.")
+			return
+	else:
+		print ("inmode is incorrect. Must be choosen from 'fits' or 'data'.")
+
+
+
+	# number of axis
+	naxis    = header['NAXIS']
+	if naxis < 2:
+		print ('ERROR\tfits_deprojection: NAXIS of fits is < 2 although It must be > 2.')
+		return
+
+	naxis_i  = np.array([int(header['NAXIS'+str(i+1)]) for i in range(naxis)])
+	label_i  = np.array([header['CTYPE'+str(i+1)] for i in range(naxis)])
+	refpix_i = np.array([int(header['CRPIX'+str(i+1)]) for i in range(naxis)])
+	refval_i = np.array([header['CRVAL'+str(i+1)] for i in range(naxis)]) # degree
+	if 'CDELT1' in header:
+		del_i    = np.array([header['CDELT'+str(i+1)] for i in range(naxis)]) # degree
+
+	# beam size (degree)
+	if 'BMAJ' in header:
+		bmaj     = header['BMAJ'] # degree
+		bmin     = header['BMIN'] # degree
+		bpa      = header['BPA']  # degree
+		if 'BUNIT' in header:
+			unit = header['BUNIT']
+		else:
+			unit = 'deg'
+	else:
+		plot_beam = False
+		bmaj, bmin, bpa = [0,0,0]
+
+	# rest frequency (Hz)
+	if 'RESTFRQ' in header:
+		restfreq = header['RESTFRQ']
+	elif 'RESTFREQ' in header:
+		restfreq = header['RESTFREQ']
+	elif 'FREQ' in header:
+		restfreq = header['FREQ']
+	else:
+		print ('WARNING: Cannot find restfrequency in the header.')
+		restfreq = None
+
+	if 'LONPOLE' in header:
+		phi_p = header['LONPOLE']
+	else:
+		phi_p = 180.
+
+	if 'LATPOLE' in header:
+		the_p = header['LATPOLE']
+	else:
+		the_p = None
+
+
+	# coordinates
+	# read projection type
+	try:
+		projection = label_i[0].replace('RA---','')
+	except:
+		print ('Cannot read information about projection from fits file.')
+		print ('Set projection SIN for radio interferometric data.')
+		projection = 'SIN'
+
+	# rotation of pixel coordinates
+	if 'PC1_1' in header:
+		pc_ij = np.array([
+			[header['PC%i_%i'%(i+1,j+1)] for j in range(naxis)]
+			 for i in range(naxis)])
+		pc_ij = pc_ij*del_i
+	elif 'CD1_1' in header:
+		pc_ij = np.array([[header['CD%i_%i'%(i+1,j+1)] if 'CD%i_%i'%(i+1,j+1) in header else 0.
+		 for j in range(naxis)]
+		  for i in range(naxis)])
+	else:
+	    print ('CAUTION: No keyword PCi_j or CDi_j are found. No rotation is assumed.')
+	    pc_ij = np.array([
+	    	[1. if i ==j else 0. for j in range(naxis)] for i in range(naxis)])
+	    pc_ij = pc_ij*del_i
+
+
+	# get axes
+	fits_axes = np.array([np.dot(pc_ij, (i+1 - refpix_i))\
+	 for i in range(np.max(naxis_i))]).T # +1 in i+1 comes from 0 start index in python
+	fits_axes = np.array([fits_axes[i,:naxis_i[i]] for i in range(naxis)]) + refval_i
+	#xaxis = xaxis[:naxis_i[0]]
+	#yaxis = yaxis[:naxis_i[1]]
+
+	if relative:
+		fits_axes[0] = fits_axes[0] - refval_i[0]
+		fits_axes[1] = fits_axes[1] - refval_i[1]
+
+	if velocity:
+		if naxis <= 2:
+			print ('ERROR: The number of axes of the fits file is <= 2. No velocity axis.')
+		else:
+			if label_i[2] == 'VRAD' or label_i[2] == 'VELO':
+				print ('The third axis is ', label_i[2])
+				del_v    = del_v*1.e-3    # m/s --> km/s
+				refval_v = refval_v*1.e-3 # m/s --> km/s
+			else:
+				print ('The third axis is ', label_i[2])
+				fits_axes[2] = clight*(1.-fits_axes[2]/restfreq) # radio velocity c*(1-f/f0) [cm/s]
+				fits_axes[2] = fits_axes[2]*1.e-5                # cm/s --> km/s
+
+	return fits_axes
 
 
 if __name__ == '__main__':

@@ -7,14 +7,17 @@ import numpy as np
 
 
 ### functions
-def gaussian1D(x, A, mx, sigx):
+def gaussian1D(x, A, mx, sigx, peak=False):
     # Generate normalized 1D Gaussian
 
     # x: x value (coordinate)
     # A: Amplitude. Not a peak value, but the integrated value.
     # mx: mean value
     # sigx: standard deviation
-    coeff = A/np.sqrt(2.0*np.pi*sigx*sigx)
+    if peak:
+        coeff = A
+    else:
+        coeff = A/np.sqrt(2.0*np.pi*sigx*sigx)
     expx = np.exp(-(x-mx)*(x-mx)/(2.0*sigx*sigx))
     gauss=coeff*expx
     return(gauss)
@@ -28,7 +31,8 @@ def gaussian2D(x, y, A, mx, my, sigx, sigy, pa=0):
     # mx, my: mean values
     # sigx, sigy: standard deviations
     # pa: position angle [deg]. Counterclockwise is positive.
-    x, y = rotate2d(x,y,pa)
+    x, y   = rotate2d(x,y,pa)
+    mx, my = rotate2d(mx, my, pa)
 
 
     coeff = A/(2.0*np.pi*sigx*sigy)
