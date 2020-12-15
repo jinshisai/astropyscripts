@@ -1128,7 +1128,8 @@ def channelmap(fitsdata, grid=None, outname=None, outformat='pdf', imscale=[1], 
         cbar_loc, cbar_wd, cbar_pad = cbaroptions
         grid = ImageGrid(fig, rect=111, nrows_ncols=(nrow,ncol),
         	axes_pad=0,share_all=True,cbar_mode=cbar_mode,
-            cbar_location=cbar_loc,cbar_size=cbar_wd,cbar_pad=cbar_pad)
+            cbar_location=cbar_loc,cbar_size=cbar_wd,cbar_pad=cbar_pad,
+            label_mode='1')
 
     # setting parameters used to plot
     if len(imscale) == 1:
@@ -1332,7 +1333,8 @@ def channelmap(fitsdata, grid=None, outname=None, outformat='pdf', imscale=[1], 
 def pvdiagram(self,outname,data=None,header=None,ax=None,outformat='pdf',color=True,cmap='Greys',
     vmin=None,vmax=None,vsys=None,contour=True,clevels=None,ccolor='k',
     vrel=False,logscale=False,x_offset=False,ratio=1.2, prop_vkep=None,fontsize=14,
-    lw=1,clip=None,plot_res=True,inmode='fits',xranges=[], yranges=[]):
+    lw=1,clip=None,plot_res=True,inmode='fits',xranges=[], yranges=[],
+    ln_hor=True, ln_var=True):
 
     # setting for figures
     plt.rcParams['font.size'] = fontsize           # fontsize
@@ -1400,13 +1402,13 @@ def pvdiagram(self,outname,data=None,header=None,ax=None,outformat='pdf',color=T
 
 
     # relative velocity or LSRK
-    offlabel = 'offset (arcsec)'
+    offlabel = r'$\mathrm{Offset\ (arcsec)}$'
     if vrel:
         refval_vel = refval_vel - vsys
-        vellabel   = 'relative velocity (km/s)'
+        vellabel   = r'$\mathrm{Relative\ velocity\ (km\ s^{-1})}$'
         vcenter    = 0
     else:
-        vellabel = 'LSRK velocity (km/s)'
+        vellabel = r'$\mathrm{LSR\ velocity\ (km\ s^{-1})}$'
         vcenter  = vsys
 
 
@@ -1492,8 +1494,11 @@ def pvdiagram(self,outname,data=None,header=None,ax=None,outformat='pdf',color=T
 
 
     # lines showing offset 0 and relative velocity 0
-    xline = plt.hlines(hline_params[0], hline_params[1], hline_params[2], ccolor, linestyles='dashed', linewidths = 0.5)
-    yline = plt.vlines(vline_params[0], vline_params[1], vline_params[2], ccolor, linestyles='dashed', linewidths = 0.5)
+    if ln_hor:
+        xline = plt.hlines(hline_params[0], hline_params[1], hline_params[2], ccolor, linestyles='dashed', linewidths = 1.)
+    if ln_var:
+        yline = plt.vlines(vline_params[0], vline_params[1], vline_params[2], ccolor, linestyles='dashed', linewidths = 1.)
+
     ax.tick_params(which='both', direction='in',bottom=True, top=True, left=True, right=True, pad=9)
 
     # plot resolutions
@@ -1504,7 +1509,8 @@ def pvdiagram(self,outname,data=None,header=None,ax=None,outformat='pdf',color=T
         ax.errorbar(0.1, 0.1, xerr=res_x_plt, yerr=res_y_plt, color=ccolor, capsize=3, capthick=1., elinewidth=1., transform=ax.transAxes)
 
     # aspect ratio
-    change_aspect_ratio(ax, ratio)
+    if ratio:
+        change_aspect_ratio(ax, ratio)
 
 
     # save figure
