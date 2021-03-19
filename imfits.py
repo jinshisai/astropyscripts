@@ -186,7 +186,7 @@ class Imfits():
 				else:
 					self.delv = 1.
 
-		axes = np.array([xaxis, yaxis, vaxis, saxis])
+		axes = np.array([xaxis, yaxis, vaxis, saxis], dtype=object)
 		self.axes  = axes
 		self.vaxis = vaxis
 
@@ -236,13 +236,13 @@ class Imfits():
 			self.pa = None
 
 		# Resolution along offset axis
-		if self.pa:
+		if self.pa is not None:
 			# an ellipse of the beam
 			# (x/bmin)**2 + (y/bmaj)**2 = 1
 			# y = x*tan(theta)
 			# --> solve to get resolution in the direction of pv cut with P.A.=pa
 			bmaj, bmin, bpa = self.beam
-			del_pa = pa - bpa
+			del_pa = self.pa - bpa
 			del_pa = del_pa*np.pi/180. # radian
 			term_sin = (np.sin(del_pa)/bmin)**2.
 			term_cos = (np.cos(del_pa)/bmaj)**2.
@@ -317,11 +317,11 @@ class Imfits():
 			#del_i[1] = -del_i[1]*clight/restfreq  # delf --> delv [cm/s]
 			#del_i[1] = del_i[1]*1.e-5             # cm/s --> km/s
 
-		axes_out = np.array([xaxis, vaxis])
+		axes_out = np.array([xaxis, vaxis], dtype=object)
 		if naxis >= 2:
 			saxis = axes[2]
 			saxis = saxis[:naxis_i[2]]
-			axes_out = np.array([xaxis, vaxis, saxis])
+			axes_out = np.array([xaxis, vaxis, saxis], dtype=object)
 
 
 		# get delta
@@ -731,6 +731,165 @@ class Imfits():
 		self.yy = delta
 		self.cc = new_cent
 		self.ctype = 'relative'
+
+
+	def getmoments(self, moment=[0], vrange=[], threshold=[],
+	 rms=None, outfits=False, outname=None, overwrite=False):
+		'''
+		Calculate moment maps.
+
+		moment(list): Index of moments that you want to calculate.
+		'''
+
+		data  = self.data
+		xaxis, yaxis, vaxis, saxis = self.axes
+		nx = len(xaxis)
+		ny = len(yaxis)
+		delv = np.abs(vaxis[1] - vaxis[0])
+
+		if len(data.shape) <= 2:
+			print ('ERROR\tgetmoments: Data must have more than three axes to calculate moments.')
+			return
+		elif len(data.shape) == 3:
+			pass
+		elif len(data.shape) == 4:
+			data = data[0,:,:,:]
+		else:
+			print ('ERROR\tgetmoments: Data have more than five axes. Cannot recognize.')
+			return
+
+		if len(vrange) == 2:
+			index = np.where( (vaxis >= vrange[0]) & (vaxis <= vrange[1]))
+			data  = data[index[0],:,:]
+			vaxis = vaxis[index[0]]
+
+		if len(threshold):
+			index = np.where( (data < threshold[0]) | (data > threshold[1]) )
+			data[index] = 0.
+
+
+		# condition
+		nchan = len(vaxis)
+		print ('Calculate moments of an image.')
+		print ('nchan: %i'%nchan)
+		print ('Velocity range: %.4f--%.4f km/s'%(vaxis[0], vaxis[-1]))
+		print ('Calculating...')
+		#print (vaxis)
+
+
+		# start
+		mom0 = np.array([[np.sum(delv*data[:,j,i]) for i in range(nx)] for j in range(ny)])
+		w2   = np.array([[np.sum(delv*data[:,j,i]*delv*data[:,j,i])
+			for i in range(nx)] for j in range(ny)]) # Sum_i w_i^2
+		ndata = np.array([
+			[len(np.nonzero(data[:,j,i])[0]) for i in range(nx)]
+			 for j in range(ny)]) # number of data points used for calculations
+
+
+		moments     = [mom0]
+		moments_err = []
+
+		# moment 1
+		if any([i >= 1 for i in moment ]):
+			mom1 = np.array([[np.sum((data[:,j,i]*vaxis*delv))
+				for i in range(nx)]
+				for j in range(ny)])/mom0
+			moments.append(mom1)
+
+
+			# calculate error
+			sig_v2   = np.array([[np.sum(
+				delv*((mom1[j,i] - vaxis[np.where(data[:,j,i] > 0)])**2))
+			for i in range(nx)] for j in range(ny)])
+
+			# Eq. (2.3) of Belloche 2013
+			# approximated solution
+			#sig_mom1_bl = rms*np.sqrt(sig_v2)/mom0 # 1 sigma, standerd deviation
+
+			sig_mom1 = np.sqrt(w2*sig_v2/(ndata - 1.))/mom0 # accurate
+			#print (sig_mom1)
+
+			# taking into account error of weighting
+			#sum_v2     = np.array([[
+			#		np.sum(vaxis[np.where(data[:,j,i] > 0)]*delv*vaxis[np.where(data[:,j,i] > 0)]*delv)
+			#		for i in range(nx)] for j in range(ny)])
+			#term_sigv2 = w2/(mom0*mom0)*(sig_v2/(ndata - 1.))
+			#term_sigw2 = (ndata*mom1*mom1 + sum_v2)*rms*rms/(mom0*mom0)
+			#sig_mom1 = np.sqrt(term_sigv2 + term_sigw2)
+
+			# check
+			#sct = plt.scatter(sig_mom1_bl.ravel(), sig_mom1.ravel(), alpha=0.5,
+			# c=(np.array([[np.nanmax(data[:,j,i])/rms for i in range(nx)] for j in range(ny)])/np.sqrt(ndata)).ravel(),
+			# rasterized=True)
+			#plt.plot(np.linspace(0.,0.2, 32), 0.5*np.linspace(0.,0.2, 32), lw=3., alpha=0.7, color='k', ls='--')
+			#plt.plot(np.linspace(0.,0.2, 32), 2.*np.linspace(0.,0.2, 32), lw=3., alpha=0.7, color='k', ls='--')
+			#plt.plot(np.linspace(0.,0.2, 32), np.linspace(0.,0.2, 32), lw=3., alpha=0.7, color='k')
+			#plt.colorbar(sct, label=r'$\mathrm{SNR} / \sqrt{n_\mathrm{data}}$')
+			#plt.aspect_ratio(1)
+
+			#plt.xlim(0,0.2)
+			#plt.ylim(0,0.2)
+			#plt.xlabel(r'$\sigma_\mathrm{mom1, Belloche13}$')
+			#plt.ylabel(r'$\sigma_\mathrm{mom1, accurate}$')
+			#plt.show()
+
+			#moments_err.append(sig_mom1)
+			moments.append(sig_mom1)
+
+
+		if any([i == 2 for i in moment ]):
+			mom2 = np.sqrt(np.array([[np.sum((data[:,j,i]*delv*(vaxis - mom1[j,i])**2.))
+			for i in range(nx)]
+			for j in range(ny)])/mom0)
+			moments.append(mom2)
+
+			sig_mom2 = np.sqrt(
+				2./(np.count_nonzero(data[:,j,i]) - 1.) * (mom0[j,i]*mom2[j,i]/(mom0[j,i] - (w2[j,i]/mom0[j,i])))**2.
+				)
+
+			#moments_err.append(sig_mom2)
+			moments.append(sig_mom2)
+
+		print ('Done.')
+
+
+		# output
+		#print (np.array(moments).shape)
+		print ('Output: Moment '+' '.join([str(moment[i]) for i in range(len(moment))])
+			+' and thier error maps except for moment 0.')
+
+		if outfits:
+			hdout = self.header
+			naxis = self.naxis
+
+			if naxis == 3:
+				outmaps = np.array(moments)
+			elif naxis == 4:
+				outmaps = np.array([moments])
+			else:
+				print ('ERROR\tgetmoments: Input fits file must have 3 or 4 axes.')
+				return
+
+			# moment axis
+			hdout['NAXIS3'] = len(moments)
+			hdout['CTYPE3'] = 'Moments'
+			hdout['CRVAL3'] = 1.
+			hdout['CRPIX3'] = 1.
+			hdout['CDELT3'] = 1.
+			hdout['CUNIT3'] = '       '
+
+			hdout['HISTORY'] = 'Produced by getmoments in Imfits.'
+			hdout['HISTORY'] = 'Moments: '+' '.join([str(moment[i]) for i in range(len(moment))])
+
+			if outname:
+				pass
+			else:
+				outname = self.file.replace('.fits','_moments.fits')
+
+			#print (outmaps.shape)
+			fits.writeto(outname, outmaps, header=hdout, overwrite=overwrite)
+
+		return moments
 
 
 	# ------------------ for plot ---------------------
@@ -1466,7 +1625,7 @@ class Imfits():
 		vmin=None,vmax=None,vsys=0,contour=True,clevels=None,ccolor='k', pa=None,
 		vrel=False,logscale=False,x_offset=False,ratio=1.2, prop_vkep=None,fontsize=14,
 		lw=1,clip=None,plot_res=True,inmode='fits',xranges=[], yranges=[],
-		ln_hor=True, ln_var=True):
+		ln_hor=True, ln_var=True, alpha=None):
 		'''
 		Draw a PV diagram.
 
@@ -1620,10 +1779,12 @@ class Imfits():
 
 		# plot images
 		if color:
-			imcolor = ax.imshow(data_color, cmap=cmap, origin='lower', extent=extent,norm=norm)
+			imcolor = ax.imshow(data_color, cmap=cmap, origin='lower',
+				extent=extent, norm=norm, alpha=alpha)
 
 		if contour:
-			imcont  = ax.contour(data, colors=ccolor, origin='lower',extent=extent, levels=clevels, linewidths=lw)
+			imcont  = ax.contour(data, colors=ccolor, origin='lower',
+				extent=extent, levels=clevels, linewidths=lw, alpha=alpha)
 
 
 		# axis labels
